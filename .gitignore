@@ -1,0 +1,14 @@
+# Ignore any library object.
+lib
+*.so
+*.a
+
+# Ignore any binary object.
+bin
+*.o
+
+# Ignore ctags.
+.tags
+
+# Ignore any copy of JSMN source code.
+include/jsmn.h
