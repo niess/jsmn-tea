@@ -4,7 +4,7 @@ CFLAGS := -O2 -Iinclude -std=c99 -pedantic
 
 lib: lib/libjsmn-tea.a
 
-example: bin/example
+example: bin/demo bin/benchmark
 
 clean:
 	@rm -rf bin lib *.o include/jsmn.h

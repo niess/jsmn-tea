@@ -1,6 +1,6 @@
+#include "jsmn-tea.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "jsmn-tea.h"
 
 /* Handle for the JSMN-TEA object. */
 static struct jsmn_tea * tea = NULL;
@@ -13,16 +13,13 @@ void exit_gracefully(int rc)
 }
 
 /* Error handler for JSMN-TEA. */
-void error_handler(void)
-{
-        exit_gracefully(EXIT_FAILURE);
-}
+void error_handler(void) { exit_gracefully(EXIT_FAILURE); }
 
 int main()
 {
         /* First let us create a new JSMN-TEA object from a JSON file. */
-        tea = jsmn_tea_create("example/example.json", JSMN_TEA_MODE_LOAD,
-            &error_handler, stderr);
+        tea = jsmn_tea_create(
+            "example/demo.json", JSMN_TEA_MODE_LOAD, &error_handler, stderr);
 
         /* Then, let us require a JSON object as base token. */
         jsmn_tea_next_object(tea, NULL);

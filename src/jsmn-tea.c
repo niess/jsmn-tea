@@ -53,8 +53,6 @@ static const char * string_error_mode = "%s (%d): invalid mode (%d).\n";
 
 static const char * string_error_io =
     "%s (%d): error while reading file `%s`.\n";
-static const char * string_error_size =
-    "%s (%d): [%s #%d] invalid array size (%d != %d).\n";
 static const char * string_error_type =
     "%s (%d): [%s #%d] unexpected type (%s).\n";
 static const char * string_error_value =
@@ -165,40 +163,46 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                 return NULL;
         }
 
-        /* Parse the JSON data. 1st let us check the number of tokens.*/
+        /* Let us analyse the content with JSMN, i.e. parse the tokens. */
         jsmn_init(&tea->api.parser);
-        tea->n_tokens =
-            jsmn_parse(&tea->api.parser, tea->buffer, buffer_size, NULL, 0);
-        if (tea->n_tokens <= 0) {
-                const int jrc =
-                    (tea->n_tokens == 0) ? JSMN_ERROR_INVAL : tea->n_tokens;
-                error_print(&api, string_error_json, __FILE__, __LINE__,
-                    tea->path, string_jsmnerr[-jrc - 1]);
-                free(tea);
-                if (error_handler != NULL) error_handler();
-                return NULL;
+        tea->tokens = NULL;
+        int size = 0;
+        tea->n_tokens = JSMN_ERROR_NOMEM;
+        while (tea->n_tokens == JSMN_ERROR_NOMEM) {
+                /* Increase the memory until it contains all tokens. */
+                size += 2048;
+                void * tmp = realloc(tea->tokens, size * sizeof(*tea->tokens));
+                if (tmp == NULL) {
+                        error_print(
+                            &api, string_error_memory, __FILE__, __LINE__);
+                        free(tea->tokens);
+                        free(tea);
+                        if (error_handler != NULL) error_handler();
+                        return NULL;
+                }
+                tea->tokens = tmp;
+
+                /* Parse with JSMN. */
+                tea->n_tokens = jsmn_parse(&tea->api.parser, tea->buffer,
+                    buffer_size, tea->tokens, size);
         }
 
-        /* Then let us allocate the tokens array and parse the file again. */
-        tea->tokens = malloc(tea->n_tokens * sizeof(*tea->tokens));
-        if (tea->tokens == NULL) {
-                error_print(&api, string_error_memory, __FILE__, __LINE__);
-                free(tea);
-                if (error_handler != NULL) error_handler();
-                return NULL;
-        }
-        jsmn_init(&tea->api.parser);
-        const int jrc = jsmn_parse(&tea->api.parser, tea->buffer, buffer_size,
-            tea->tokens, tea->n_tokens);
-        if (jrc < 0) {
+        /* Let us check the termination condition of the parsing. */
+        if (tea->n_tokens < 0) {
                 error_print(&api, string_error_json, __FILE__, __LINE__,
-                    tea->path, string_jsmnerr[-jrc - 1]);
+                    tea->path, string_jsmnerr[-tea->n_tokens - 1]);
                 free(tea->tokens);
                 free(tea);
                 if (error_handler != NULL) error_handler();
                 return NULL;
         }
 
+        /* Finally let us free any extra memory. */
+        if (tea->n_tokens < size)
+                tea->tokens =
+                    realloc(tea->tokens, tea->n_tokens * sizeof(*tea->tokens));
+
+        /* Configure the new object and return its handle. */
         tea->api.error_handler = error_handler;
         tea->api.error_stream = error_stream;
         tea->error_enabled = 1;
@@ -290,6 +294,7 @@ enum jsmnerr jsmn_tea_next_string(struct jsmn_tea * tea_, char ** string)
         UNPACK_ALL;
         if ((token->type == JSMN_PRIMITIVE) && (strcmp(s, "null") == 0)) {
                 if (string != NULL) *string = NULL;
+                tea->api.index++;
                 return JSMN_SUCCESS;
         }
         if (token->type != JSMN_STRING) {
@@ -302,32 +307,40 @@ enum jsmnerr jsmn_tea_next_string(struct jsmn_tea * tea_, char ** string)
         return JSMN_SUCCESS;
 }
 
-/* Setters for integer like numbers. */
+/* Setter type for integer like numbers. */
 typedef void integer_setter_t(void * p, long l);
 
+/* The destination address is a char. */
 static void integer_to_char(void * p, long l) { *(char *)p = (char)l; }
 
+/* The destination address is an unsigned char. */
 static void integer_to_unsigned_char(void * p, long l)
 {
         *(unsigned char *)p = (unsigned char)l;
 }
 
+/* The destination address is a short. */
 static void integer_to_short(void * p, long l) { *(short *)p = (short)l; }
 
+/* The destination address is an unsigned short. */
 static void integer_to_unsigned_short(void * p, long l)
 {
         *(unsigned short *)p = (unsigned short)l;
 }
 
+/* The destination address is an int. */
 static void integer_to_int(void * p, long l) { *(int *)p = (int)l; }
 
+/* The destination address is an unsigned int. */
 static void integer_to_unsigned_int(void * p, long l)
 {
         *(unsigned int *)p = (unsigned int)l;
 }
 
+/* The destination address is a long. */
 static void integer_to_long(void * p, long l) { *(long *)p = l; }
 
+/* The destination address is an unsigned long. */
 static void integer_to_unsigned_long(void * p, long l)
 {
         *(unsigned long *)p = (unsigned long)l;
@@ -345,7 +358,7 @@ enum jsmnerr jsmn_tea_next_number(
         }
         char * endptr;
         if (type < JSMN_TEA_TYPE_FLOAT) {
-                const long l = strtol(s, &endptr, 0);
+                const long l = strtol(s, &endptr, 10);
                 if (*endptr != 0) {
                         return error_raise(&tea->api, JSMN_ERROR_INVAL,
                             string_error_value, __FILE__, __LINE__, tea->path,
@@ -386,17 +399,15 @@ enum jsmnerr jsmn_tea_next_bool(struct jsmn_tea * tea_, int * value)
                     string_error_type, __FILE__, __LINE__, tea->path,
                     tea->api.index, string_jsmntype[token->type]);
         }
-        if (strcmp(s, "true") == 0)
-                if (value != NULL)
-                        *value = 1;
-                else if (strcmp(s, "false") == 0)
-                        if (value != NULL)
-                                *value = 0;
-                        else {
-                                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                                    string_error_value, tea->path,
-                                    tea->api.index, "a boolean", s);
-                        }
+        if (strcmp(s, "true") == 0) {
+                if (value != NULL) *value = 1;
+        } else if (strcmp(s, "false") == 0) {
+                if (value != NULL) *value = 0;
+        } else {
+                return error_raise(&tea->api, JSMN_ERROR_INVAL,
+                                   string_error_value, tea->path,
+                                   tea->api.index, "a boolean", s);
+        }
         tea->api.index++;
         return JSMN_SUCCESS;
 }
