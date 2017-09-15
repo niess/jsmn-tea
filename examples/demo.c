@@ -19,7 +19,7 @@ int main()
 {
         /* First let us create a new JSMN-TEA object from a JSON file. */
         tea = jsmn_tea_create(
-            "example/demo.json", JSMN_TEA_MODE_LOAD, &error_handler, stderr);
+            "examples/demo.json", JSMN_TEA_MODE_LOAD, &error_handler, stderr);
 
         /* Then, let us require a JSON object as base token. */
         jsmn_tea_next_object(tea, NULL);
@@ -37,7 +37,7 @@ int main()
          */
         char * key;
         double value;
-        jsmn_tea_next_string(tea, &key);
+        jsmn_tea_next_string(tea, 1, &key);
         jsmn_tea_next_number(tea, JSMN_TEA_TYPE_DOUBLE, &value);
         printf("{ %s : %g }\n", key, value);
 

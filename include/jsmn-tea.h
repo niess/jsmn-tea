@@ -152,12 +152,14 @@ enum jsmnerr jsmn_tea_next_array(struct jsmn_tea * tea, int * size);
 /**
  * Get the next token as a JSON string.
  * @param  tea    A pointer to a `jsmn_tea` instance.
+ * @param  key    A flag indicating that the string is a key in a JSON object.
  * @param  string The corresponding C formated string.
  * @return        `JSMN_SUCCESS` on success or a `jsmnerr` enum value otherwise.
  *
  * **Note** that the returned C string is null terminated.
  */
-enum jsmnerr jsmn_tea_next_string(struct jsmn_tea * tea, char ** string);
+enum jsmnerr jsmn_tea_next_string(
+    struct jsmn_tea * tea, int key, char ** string);
 
 /**
  * Get the next token as a JSON number.

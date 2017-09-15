@@ -55,6 +55,8 @@ static const char * string_error_io =
     "%s (%d): error while reading file `%s`.\n";
 static const char * string_error_type =
     "%s (%d): [%s #%d] unexpected type (%s).\n";
+static const char * string_error_empty =
+    "%s (%d): [%s #%d] missing value for key `%s`.\n";
 static const char * string_error_value =
     "%s (%d): [%s #%d] invalid value. Expected %s. Got `%s`.\n";
 
@@ -90,7 +92,7 @@ static void error_print(struct jsmn_tea * tea_, const char * fmt, ...)
 struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
     jsmn_tea_cb * error_handler, FILE * error_stream)
 {
-        struct jsmn_tea api = { { 0, 0, 0 }, 0, error_handler, error_stream };
+        struct jsmn_tea api = { { 0, 0, 0 }, 1, error_handler, error_stream };
         struct tea_object * tea = NULL;
         size_t buffer_size = 0;
 
@@ -289,10 +291,12 @@ enum jsmnerr jsmn_tea_next_array(struct jsmn_tea * tea_, int * size)
 }
 
 /* Get the next JSON string. */
-enum jsmnerr jsmn_tea_next_string(struct jsmn_tea * tea_, char ** string)
+enum jsmnerr jsmn_tea_next_string(
+    struct jsmn_tea * tea_, int key, char ** string)
 {
         UNPACK_ALL;
-        if ((token->type == JSMN_PRIMITIVE) && (strcmp(s, "null") == 0)) {
+        if (!key && (token->type == JSMN_PRIMITIVE) &&
+            (strcmp(s, "null") == 0)) {
                 if (string != NULL) *string = NULL;
                 tea->api.index++;
                 return JSMN_SUCCESS;
@@ -300,7 +304,12 @@ enum jsmnerr jsmn_tea_next_string(struct jsmn_tea * tea_, char ** string)
         if (token->type != JSMN_STRING) {
                 return error_raise(&tea->api, JSMN_ERROR_INVAL,
                     string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, token->type, s);
+                    tea->api.index, string_jsmntype[token->type]);
+        }
+        if (key && (token->size != 1)) {
+                return error_raise(&tea->api, JSMN_ERROR_INVAL,
+                    string_error_empty, __FILE__, __LINE__, tea->path,
+                    tea->api.index, s);
         }
         if (string != NULL) *string = s;
         tea->api.index++;
@@ -405,8 +414,8 @@ enum jsmnerr jsmn_tea_next_bool(struct jsmn_tea * tea_, int * value)
                 if (value != NULL) *value = 0;
         } else {
                 return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                                   string_error_value, tea->path,
-                                   tea->api.index, "a boolean", s);
+                    string_error_value, tea->path, tea->api.index, "a boolean",
+                    s);
         }
         tea->api.index++;
         return JSMN_SUCCESS;
@@ -419,7 +428,7 @@ enum jsmnerr jsmn_tea_next_null(struct jsmn_tea * tea_)
         if ((token->type != JSMN_PRIMITIVE) || (strcmp(s, "null") != 0)) {
                 return error_raise(&tea->api, JSMN_ERROR_INVAL,
                     string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, token->type, s);
+                    tea->api.index, string_jsmntype[token->type]);
         }
         return JSMN_SUCCESS;
 }

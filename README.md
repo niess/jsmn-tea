@@ -24,9 +24,9 @@ installation.
 ## API description
 
 A detailed description of the API is given in the
-[jsmn-tea.h](include/jsmn-tea.h) header file. A simple example exposing some
-of the key functionalities can be found in the [example](example) folder. In the
-following we however follow a more narrative description. Note that while
+[jsmn-tea.h](include/jsmn-tea.h) header file. Simple examples exposing some
+of the key functionalities can be found in the [examples](examples) folder. In
+the following we however follow a more narrative description. Note that while
 knowledge of JSMN is required for fully exploiting the JSMN-TEA extension, it
 is not necessary for a basic usage.
 
@@ -79,7 +79,8 @@ enum jsmnerr jsmn_tea_next_object(struct jsmn_tea * tea, int * size);
 enum jsmnerr jsmn_tea_next_array(struct jsmn_tea * tea, int * size);
 
 /* Use this if the next JSON item is expected to be a string. */
-enum jsmnerr jsmn_tea_next_string(struct jsmn_tea * tea, char ** string);
+enum jsmnerr jsmn_tea_next_string(
+    struct jsmn_tea * tea, int key, char ** string);
 
 /* Use this if the next JSON item is expected to be a numeric value. Note
  * that the type of the storage C variable has to be explicitly specified.
