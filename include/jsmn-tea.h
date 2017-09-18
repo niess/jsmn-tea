@@ -122,7 +122,7 @@ int jsmn_tea_token_length(struct jsmn_tea * tea);
  * @param  tea  A pointer to a `jsmn_tea` instance.
  * @param  mode Flag to specify that a copy should be returned, or not.
  * @param  raw  The corresponding raw string.
- * @return        `JSMN_SUCCESS` on success or a `jsmnerr` enum value otherwise.
+ * @return      `JSMN_SUCCESS` on success or a `jsmnerr` enum value otherwise.
  *
  * Set *mode* to `JSMN_TEA_MODE_DUP` if a copy of the raw string should be
  * provided. Otherwise set it to `JSMN_TEA_MODE_RAW`. Note that in the former
@@ -134,6 +134,14 @@ int jsmn_tea_token_length(struct jsmn_tea * tea);
  */
 enum jsmnerr jsmn_tea_token_raw(
      struct jsmn_tea * tea, enum jsmn_tea_mode mode, char ** raw);
+
+
+/**
+ * Skip the current JSMN token, recursively.
+ * @param  tea A pointer to a `jsmn_tea` instance.
+ * @return     `JSMN_SUCCESS` on success or a `jsmnerr` enum value otherwise.
+ */
+enum jsmnerr jsmn_tea_token_skip(struct jsmn_tea * tea);
 
 /**
  * Get the next token as JSON object header.

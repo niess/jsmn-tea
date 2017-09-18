@@ -272,6 +272,41 @@ enum jsmnerr jsmn_tea_token_raw(
         return JSMN_SUCCESS;
 }
 
+/* Library function for skipping the current token, recursively. */
+static enum jsmnerr token_skip(struct tea_object * tea, int * index)
+{
+        if (*index >= tea->n_tokens)
+            return error_raise(&tea->api, JSMN_ERROR_PART,
+                string_error_json, __FILE__, __LINE__, tea->path,
+                string_jsmnerr[-JSMN_ERROR_PART - 1]);
+
+        jsmntok_t * token = tea->tokens + *index;
+        (*index)++;
+        if ((token->type == JSMN_ARRAY) || (token->type == JSMN_OBJECT)) {
+                jsmntok_t * t;
+                int i;
+                for (i = 0, t = token + 1; i < token->size; i++, t++) {
+                        if (token->type == JSMN_OBJECT) {
+                                (*index)++;
+                                t++;
+                        }
+                        int rc = token_skip(tea, index);
+                        if (rc != JSMN_SUCCESS) return rc;
+                }
+        }
+        return JSMN_SUCCESS;
+}
+
+/* Library function for skipping the current token, recursively. */
+enum jsmnerr jsmn_tea_token_skip(struct jsmn_tea * tea_)
+{
+        struct tea_object * tea = (struct tea_object *)tea_;
+        int index = tea_->index;
+        const int rc = token_skip(tea, &index);
+        if (rc == JSMN_SUCCESS) tea_->index = index;
+        return rc;
+}
+
 /* Get the next token in the JSON string as a compound type. */
 static enum jsmnerr next_compound(
     struct jsmn_tea * tea_, jsmntype_t type, int * size)

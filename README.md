@@ -139,8 +139,7 @@ information is prepended to the generated error message.
 ### Inspecting JSMN tokens
 
 At the creation of a `jsmn_tea` object the whole content of the JSON data is
-analysed with JSMN and saved in memory. Information on the corresponding JSMN
-tokens is provided by the two following functions:
+analysed with JSMN and saved in memory. Information and manipulation of the corresponding JSMN tokens is provided by the following functions:
 ```c
 /* Use this to get the current JSMN token, i.e. at jsmn_tea::index. */
 jsmntok_t * jsmn_tea_token_get(struct jsmn_tea * tea);
@@ -153,6 +152,9 @@ int jsmn_tea_token_length(struct jsmn_tea * tea);
  */
 enum jsmnerr jsmn_tea_token_raw(
       struct jsmn_tea * tea, enum jsmn_tea_mode mode, char ** raw);
+
+/* Use this to skip the current token, recursively. */
+enum jsmnerr jsmn_tea_token_skip(struct jsmn_tea * tea);
 ```
 
 ## License
