@@ -92,7 +92,9 @@ static void error_print(struct jsmn_tea * tea_, const char * fmt, ...)
 struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
     jsmn_tea_cb * error_handler, FILE * error_stream)
 {
-        struct jsmn_tea api = { { 0, 0, 0 }, 1, error_handler, error_stream };
+        struct tea_object header = {
+                { { 0, 0, 0 }, 1, error_handler, error_stream }, 1
+        };
         struct tea_object * tea = NULL;
         size_t buffer_size = 0;
 
@@ -100,7 +102,7 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                 /* Open the file. */
                 FILE * stream = fopen(arg, "rb");
                 if (stream == NULL) {
-                        error_raise(&api, 0, string_error_file, __FILE__,
+                        error_raise(&header.api, 0, string_error_file, __FILE__,
                             __LINE__, arg);
                         return NULL;
                 }
@@ -115,8 +117,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                 tea =
                     malloc(sizeof(*tea) + (n + buffer_size + 1) * sizeof(char));
                 if (tea == NULL) {
-                        error_raise(&api, JSMN_ERROR_NOMEM, string_error_memory,
-                            __FILE__, __LINE__);
+                        error_raise(&header.api, JSMN_ERROR_NOMEM,
+                            string_error_memory, __FILE__, __LINE__);
                         return NULL;
                 }
 
@@ -130,8 +132,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                     tea->buffer, sizeof(*tea->buffer), buffer_size, stream);
                 fclose(stream);
                 if (nread != buffer_size) {
-                        error_print(
-                            &api, string_error_io, __FILE__, __LINE__, arg);
+                        error_print(&header.api, string_error_io, __FILE__,
+                            __LINE__, arg);
                         free(tea);
                         if (error_handler != NULL) error_handler();
                         return NULL;
@@ -145,8 +147,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                     0;
                 tea = malloc(sizeof(*tea) + n);
                 if (tea == NULL) {
-                        error_raise(&api, JSMN_ERROR_NOMEM, string_error_memory,
-                            __FILE__, __LINE__);
+                        error_raise(&header.api, JSMN_ERROR_NOMEM,
+                            string_error_memory, __FILE__, __LINE__);
                         return NULL;
                 }
 
@@ -160,8 +162,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                 } else
                         tea->buffer = arg;
         } else {
-                error_raise(
-                    &api, 0, string_error_mode, __FILE__, __LINE__, mode);
+                error_raise(&header.api, 0, string_error_mode, __FILE__,
+                    __LINE__, mode);
                 return NULL;
         }
 
@@ -175,8 +177,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                 size += 2048;
                 void * tmp = realloc(tea->tokens, size * sizeof(*tea->tokens));
                 if (tmp == NULL) {
-                        error_print(
-                            &api, string_error_memory, __FILE__, __LINE__);
+                        error_print(&header.api, string_error_memory, __FILE__,
+                            __LINE__);
                         free(tea->tokens);
                         free(tea);
                         if (error_handler != NULL) error_handler();
@@ -191,7 +193,7 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
 
         /* Let us check the termination condition of the parsing. */
         if (tea->n_tokens < 0) {
-                error_print(&api, string_error_json, __FILE__, __LINE__,
+                error_print(&header.api, string_error_json, __FILE__, __LINE__,
                     tea->path, string_jsmnerr[-tea->n_tokens - 1]);
                 free(tea->tokens);
                 free(tea);
@@ -276,9 +278,9 @@ enum jsmnerr jsmn_tea_token_raw(
 static enum jsmnerr token_skip(struct tea_object * tea, int * index)
 {
         if (*index >= tea->n_tokens)
-            return error_raise(&tea->api, JSMN_ERROR_PART,
-                string_error_json, __FILE__, __LINE__, tea->path,
-                string_jsmnerr[-JSMN_ERROR_PART - 1]);
+                return error_raise(&tea->api, JSMN_ERROR_PART,
+                    string_error_json, __FILE__, __LINE__, tea->path,
+                    string_jsmnerr[-JSMN_ERROR_PART - 1]);
 
         jsmntok_t * token = tea->tokens + *index;
         (*index)++;
