@@ -115,8 +115,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                 tea =
                     malloc(sizeof(*tea) + (n + buffer_size + 1) * sizeof(char));
                 if (tea == NULL) {
-                        error_raise(
-                            &api, 0, string_error_memory, __FILE__, __LINE__);
+                        error_raise(&api, JSMN_ERROR_NOMEM, string_error_memory,
+                            __FILE__, __LINE__);
                         return NULL;
                 }
 
@@ -145,8 +145,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                     0;
                 tea = malloc(sizeof(*tea) + n);
                 if (tea == NULL) {
-                        error_raise(
-                            &api, 0, string_error_memory, __FILE__, __LINE__);
+                        error_raise(&api, JSMN_ERROR_NOMEM, string_error_memory,
+                            __FILE__, __LINE__);
                         return NULL;
                 }
 
@@ -250,16 +250,26 @@ int jsmn_tea_token_length(struct jsmn_tea * tea_)
         return tea->n_tokens;
 }
 
-/* Library function for getting the raw JSON string corresponding to the
- * current JSMN token.
+/* Library function for getting the raw representation of the current
+ * JSMN token.
  */
-char * jsmn_tea_token_raw(struct jsmn_tea * tea_)
+enum jsmnerr jsmn_tea_token_raw(
+    struct jsmn_tea * tea_, enum jsmn_tea_mode mode, char ** raw)
 {
-        UNPACK_TEA_AND_TOKEN;
-        if ((token->type == JSMN_OBJECT) || (token->type == JSMN_OBJECT))
-                return NULL;
-        UNPACK_STRING_REPR;
-        return s;
+        UNPACK_ALL;
+        if (mode == JSMN_TEA_MODE_DUP) {
+                int n = strlen(s) + 1;
+                char * tmp = malloc(n * sizeof(char));
+                if (tmp == NULL) {
+                        return error_raise(&tea->api, JSMN_ERROR_NOMEM,
+                            string_error_memory, __FILE__, __LINE__);
+                }
+                memcpy(tmp, s, n * sizeof(char));
+                s = tmp;
+        }
+
+        *raw = s;
+        return JSMN_SUCCESS;
 }
 
 /* Get the next token in the JSON string as a compound type. */

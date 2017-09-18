@@ -118,14 +118,22 @@ jsmntok_t * jsmn_tea_token_get(struct jsmn_tea * tea);
 int jsmn_tea_token_length(struct jsmn_tea * tea);
 
 /**
- * Get the raw JSON string for the current JSMN token.
- * @param  tea A pointer to a `jsmn_tea` instance.
- * @return     The corresponding string, or `NULL`.
+ * Get the raw string representation of the current token.
+ * @param  tea  A pointer to a `jsmn_tea` instance.
+ * @param  mode Flag to specify that a copy should be returned, or not.
+ * @param  raw  The corresponding raw string.
+ * @return        `JSMN_SUCCESS` on success or a `jsmnerr` enum value otherwise.
  *
- * **Note** that for a compound object, i.e. a JSON array or a JSON object,
- * `NULL` is returned.
+ * Set *mode* to `JSMN_TEA_MODE_DUP` if a copy of the raw string should be
+ * provided. Otherwise set it to `JSMN_TEA_MODE_RAW`. Note that in the former
+ * case memory is dynamically allocated.
+ *
+ * **Warning** : for compound objects, i.e. JSON string or Array, the raw
+ * representation might have been altered by the parser if the content
+ * has already been browsed.
  */
-char * jsmn_tea_token_raw(struct jsmn_tea * tea);
+enum jsmnerr jsmn_tea_token_raw(
+     struct jsmn_tea * tea, enum jsmn_tea_mode mode, char ** raw);
 
 /**
  * Get the next token as JSON object header.

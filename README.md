@@ -148,11 +148,11 @@ jsmntok_t * jsmn_tea_token_get(struct jsmn_tea * tea);
 /* Use this to get the total number of JSMN tokens. */
 int jsmn_tea_token_length(struct jsmn_tea * tea);
 
-/* Use this to get the raw JSON representation of the current JSMN token.
- * Note that for a compound object, i.e. a JSON array or a JSON object, `ǸULL`
- * is returned.
+/* Use this to get the raw JSON representation of the current JSMN token or
+ * a copy of it.
  */
-char * jsmn_tea_token_raw(struct jsmn_tea * tea);
+enum jsmnerr jsmn_tea_token_raw(
+      struct jsmn_tea * tea, enum jsmn_tea_mode mode, char ** raw);
 ```
 
 ## License
