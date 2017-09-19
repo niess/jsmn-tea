@@ -31,6 +31,7 @@ struct tea_object {
         struct jsmn_tea api;
         int error_enabled;
         int n_tokens;
+        int buffer_size;
         char * path;
         jsmntok_t * tokens;
         char * buffer;
@@ -210,6 +211,7 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
         tea->api.error_handler = error_handler;
         tea->api.error_stream = error_stream;
         tea->error_enabled = 1;
+        tea->buffer_size = buffer_size + 1;
         return &tea->api;
 }
 
@@ -258,7 +260,32 @@ int jsmn_tea_token_length(struct jsmn_tea * tea_)
 enum jsmnerr jsmn_tea_token_raw(
     struct jsmn_tea * tea_, enum jsmn_tea_mode mode, char ** raw)
 {
-        UNPACK_ALL;
+        UNPACK_TEA_AND_TOKEN;
+        char c0 = 0x0, c1 = 0x0;
+        if (token->type == JSMN_OBJECT)
+                c0 = '{', c1 = '}';
+        else if (token->type == JSMN_ARRAY)
+                c0 = '[', c1 = ']';
+        else if (token->type == JSMN_STRING)
+                c0 = c1 = '"';
+
+        int i0 = token->start;
+        if (c0 != 0x0) {
+                for (i0 = token->start - 1; i0 >= 0; i0--) {
+                        if (tea->buffer[i0] == c0) break;
+                }
+        }
+        char * s = tea->buffer + i0;
+
+        int i1 = token->end;
+        if (c1 != 0x0) {
+                for (i1 = token->end; i1 < tea->buffer_size - 1; i1++) {
+                        if (tea->buffer[i1] == c1) break;
+                }
+                i1++;
+        }
+        tea->buffer[i1] = 0x0;
+
         if (mode == JSMN_TEA_MODE_DUP) {
                 int n = strlen(s) + 1;
                 char * tmp = malloc(n * sizeof(char));
