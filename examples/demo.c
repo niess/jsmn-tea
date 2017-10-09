@@ -13,13 +13,17 @@ void exit_gracefully(int rc)
 }
 
 /* Error handler for JSMN-TEA. */
-void error_handler(void) { exit_gracefully(EXIT_FAILURE); }
+void error_handler(struct jsmn_tea_handler * handler)
+{
+        exit_gracefully(EXIT_FAILURE);
+}
 
 int main()
 {
         /* First let us create a new JSMN-TEA object from a JSON file. */
-        tea = jsmn_tea_create(
-            "examples/demo.json", JSMN_TEA_MODE_LOAD, &error_handler, stderr);
+        struct jsmn_tea_handler handler = { stderr, &error_handler };
+        tea =
+            jsmn_tea_create("examples/demo.json", JSMN_TEA_MODE_LOAD, &handler);
 
         /* Then, let us require a JSON object as base token. */
         jsmn_tea_next_object(tea, NULL);

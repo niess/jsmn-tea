@@ -36,8 +36,22 @@ extern "C" {
 /** JSMN return code for notifying a success. */
 #define JSMN_SUCCESS 0
 
-/** Generic callback, used for registering an error handler. */
-typedef void jsmn_tea_cb(void);
+struct jsmn_tea_handler;
+/** Callback prototype of an error handler. */
+typedef void jsmn_tea_cb(struct jsmn_tea_handler * handler);
+
+/**
+ * Base data structure for error handling
+ *
+ * Note that this is the minimalist set of data required for handling errors.
+ * It can be overloaded for a specific usage.
+ */
+struct jsmn_tea_handler {
+        /** The stream to which errors are reported, or `NULL`. */
+        FILE * stream;
+        /** A callback to call whenever an error occurs, or `NULL`. */
+        jsmn_tea_cb * callback;
+};
 
 /**
  * Handle for Text Encapsulation and Analysis using JSMN.
@@ -56,9 +70,7 @@ struct jsmn_tea {
         /* Index of the current JSMN token. */
         int index;
         /* User supplied error handler, or `NULL` if none. */
-        jsmn_tea_cb * error_handler;
-        /* Output stream for errors, or `NULL` if muted. */
-        FILE * error_stream;
+        struct jsmn_tea_handler * handler;
 };
 
 /** Creation modes for a `jsmn_tea` instance. */
@@ -89,13 +101,10 @@ enum jsmn_tea_type {
  * Create a new `jsmn_tea` instance.
  * @param  arg           The JSON data string or a filename.
  * @param  mode          The `jsmn_tea_type` creation mode.
- * @param  error_handler An optional error handler, or `NULL`.
- * @param  error_stream  The stream to whicj errors are reported, or `NULL`.
- * @return               A pointer to the created `jsmn_tea` instance in case
- *                         of success, or `NULL` otherwise.
+ * @param  error_handler Optional error handler data, or `NULL`.
  */
-struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
-    jsmn_tea_cb * error_handler, FILE * error_stream);
+struct jsmn_tea * jsmn_tea_create(
+    char * arg, enum jsmn_tea_mode mode, struct jsmn_tea_handler * handler);
 
 /**
  * Properly destroy a `jsmn_tea` instance.
@@ -133,8 +142,7 @@ int jsmn_tea_token_length(struct jsmn_tea * tea);
  * has already been browsed.
  */
 enum jsmnerr jsmn_tea_token_raw(
-     struct jsmn_tea * tea, enum jsmn_tea_mode mode, char ** raw);
-
+    struct jsmn_tea * tea, enum jsmn_tea_mode mode, char ** raw);
 
 /**
  * Skip the current JSMN token, recursively.

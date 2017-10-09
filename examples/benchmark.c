@@ -49,8 +49,9 @@ int main()
 #if (USE_JSMN_TEA)
         /* Let us benchmark the parsing with JSMN-TEA. */
         for (i = 0; i < N_TRIALS; i++) {
-                static struct jsmn_tea * tea = NULL;
-                tea = jsmn_tea_create(json, JSMN_TEA_MODE_DUP, NULL, stderr);
+                struct jsmn_tea_handler handler = { stderr, NULL };
+                struct jsmn_tea * tea =
+                    jsmn_tea_create(json, JSMN_TEA_MODE_DUP, &handler);
                 int size, rc;
                 rc = jsmn_tea_next_array(tea, &size);
                 if (rc != JSMN_SUCCESS) exit(rc);

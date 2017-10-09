@@ -66,14 +66,15 @@ static int error_raise(
     struct jsmn_tea * tea_, enum jsmnerr rc, const char * fmt, ...)
 {
         struct tea_object * tea = (struct tea_object *)tea_;
-        if (!tea->error_enabled) return rc;
-        if (tea_->error_stream != NULL) {
+        struct jsmn_tea_handler * const handler = tea_->handler;
+        if ((!tea->error_enabled) || (handler == NULL)) return rc;
+        if (handler->stream != NULL) {
                 va_list valist;
                 va_start(valist, fmt);
-                vfprintf(tea_->error_stream, fmt, valist);
+                vfprintf(handler->stream, fmt, valist);
                 va_end(valist);
         }
-        if (tea_->error_handler != NULL) tea_->error_handler();
+        if (handler->callback != NULL) handler->callback(handler);
         return rc;
 }
 
@@ -81,21 +82,21 @@ static int error_raise(
 static void error_print(struct jsmn_tea * tea_, const char * fmt, ...)
 {
         struct tea_object * tea = (struct tea_object *)tea_;
-        if ((tea->error_enabled) && (tea_->error_stream != NULL)) {
+        struct jsmn_tea_handler * const handler = tea_->handler;
+        if ((tea->error_enabled) && (handler != NULL) &&
+            (handler->stream != NULL)) {
                 va_list valist;
                 va_start(valist, fmt);
-                vfprintf(tea_->error_stream, fmt, valist);
+                vfprintf(handler->stream, fmt, valist);
                 va_end(valist);
         }
 }
 
 /* Library function for creating a new `jsmn_tea` instance. */
-struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
-    jsmn_tea_cb * error_handler, FILE * error_stream)
+struct jsmn_tea * jsmn_tea_create(
+    char * arg, enum jsmn_tea_mode mode, struct jsmn_tea_handler * handler)
 {
-        struct tea_object header = {
-                { { 0, 0, 0 }, 1, error_handler, error_stream }, 1
-        };
+        struct tea_object header = { { { 0, 0, 0 }, 1, handler }, 1 };
         struct tea_object * tea = NULL;
         size_t buffer_size = 0;
 
@@ -136,7 +137,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                         error_print(&header.api, string_error_io, __FILE__,
                             __LINE__, arg);
                         free(tea);
-                        if (error_handler != NULL) error_handler();
+                        if ((handler != NULL) && (handler->callback != NULL))
+                                handler->callback(handler);
                         return NULL;
                 }
                 tea->buffer[buffer_size] = 0;
@@ -182,7 +184,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                             __LINE__);
                         free(tea->tokens);
                         free(tea);
-                        if (error_handler != NULL) error_handler();
+                        if ((handler != NULL) && (handler->callback != NULL))
+                                handler->callback(handler);
                         return NULL;
                 }
                 tea->tokens = tmp;
@@ -198,7 +201,8 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                     tea->path, string_jsmnerr[-tea->n_tokens - 1]);
                 free(tea->tokens);
                 free(tea);
-                if (error_handler != NULL) error_handler();
+                if ((handler != NULL) && (handler->callback != NULL))
+                        handler->callback(handler);
                 return NULL;
         }
 
@@ -208,8 +212,7 @@ struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
                     realloc(tea->tokens, tea->n_tokens * sizeof(*tea->tokens));
 
         /* Configure the new object and return its handle. */
-        tea->api.error_handler = error_handler;
-        tea->api.error_stream = error_stream;
+        tea->api.handler = handler;
         tea->error_enabled = 1;
         tea->buffer_size = buffer_size + 1;
         return &tea->api;
@@ -526,16 +529,17 @@ enum jsmnerr jsmn_tea_error_raise(
     struct jsmn_tea * tea_, enum jsmnerr rc, const char * fmt, ...)
 {
         struct tea_object * tea = (struct tea_object *)tea_;
-        if (!tea->error_enabled) return rc;
-        if (tea_->error_stream != NULL) {
+        struct jsmn_tea_handler * const handler = tea_->handler;
+        if ((!tea->error_enabled) || (handler == NULL)) return rc;
+        if (handler->stream != NULL) {
                 struct tea_object * tea = (struct tea_object *)tea_;
-                fprintf(tea_->error_stream, "%s (%d): [%s #%d] ", __FILE__,
+                fprintf(handler->stream, "%s (%d): [%s #%d] ", __FILE__,
                     __LINE__, tea->path, tea_->index);
                 va_list valist;
                 va_start(valist, fmt);
-                vfprintf(tea_->error_stream, fmt, valist);
+                vfprintf(handler->stream, fmt, valist);
                 va_end(valist);
         }
-        if (tea_->error_handler != NULL) tea_->error_handler();
+        if (handler->callback != NULL) handler->callback(handler);
         return rc;
 }
