@@ -39,8 +39,8 @@ the JSON text from a file into memory. The `jsmn_tea` object must be created and
 destroyed using the following API functions:
 ```c
 /* Use this, e.g. to load a JSON file to memory and to analyse its content. */
-struct jsmn_tea * jsmn_tea_create(char * arg, enum jsmn_tea_mode mode,
-    jsmn_tea_cb * error_handler, FILE * error_stream);
+struct jsmn_tea * jsmn_tea_create(
+    char * arg, enum jsmn_tea_mode mode, jsmn_tea_handler * handler);
 
 /* Always destroy with this for proper memory usage. */
 void jsmn_tea_destroy(struct jsmn_tea ** tea);
@@ -55,7 +55,7 @@ the string content after it has been analysed with JSMN, e.g. introducing
 use `JSMN_TEA_MODE_DUP` in order to work with a copy. In the first mode,
 the file content is never altered though.
 
-In addition, the `jsmn_tea_create` function takes two more arguments allowing
+In addition, the `jsmn_tea_create` function takes one more arguments allowing
 for some automated error handling. More detail on this is provided
 hereafter.
 
@@ -101,9 +101,9 @@ of success or a `jsmnerr` enum value otherwise.
 
 ### Error handling
 
-Whenever a library error occurs the `jsmn_tea::error_handler` is triggered, if
-not `NULL`. In addition a short descriptive error message is dumped to
-`jsmn_tea::error_stream`, if not `NULL`. The format of the error message is as
+Whenever a library error occurs the `jsmn_tea_handler::callback` is triggered,
+if not `NULL`. In addition a short descriptive error message is dumped to
+`jsmn_tea_handler::stream`, if not `NULL`. The format of the error message is as
 follow:
 ```c
 "file.c (line-number): [file.json #token-index] {description}\n"
@@ -112,10 +112,10 @@ where the two first elements specify the C file and the line where the error
 was triggered. The two following one are optional. They specify the faulty JSON
 file and the JSMN token index, in case of a parsing error.
 
-Note that despite the error handler and the output stream are provided at
-the creation of the `jsmn_tea` object, they can be modified afterwards, on
-the flight. For convenience, the JSMN-TEA library also provides two more
-functions for masking or unmasking them both, as:
+Note that despite the error handler is provided at the creation of the\
+`jsmn_tea` object, it can be modified afterwards, on the flight. For
+convenience, the JSMN-TEA library also provides two more functions for masking
+or unmasking error handling, as:
 ```c
 /* Call this to disable errors handling and dumping. */
 void jsmn_tea_error_disable(struct jsmn_tea * tea);
@@ -139,7 +139,8 @@ information is prepended to the generated error message.
 ### Inspecting JSMN tokens
 
 At the creation of a `jsmn_tea` object the whole content of the JSON data is
-analysed with JSMN and saved in memory. Information and manipulation of the corresponding JSMN tokens is provided by the following functions:
+analysed with JSMN and saved in memory. Information and manipulation of the
+corresponding JSMN tokens is provided by the following functions:
 ```c
 /* Use this to get the current JSMN token, i.e. at jsmn_tea::index. */
 jsmntok_t * jsmn_tea_token_get(struct jsmn_tea * tea);
