@@ -1,28 +1,36 @@
-CFLAGS := -O2 -Iinclude -std=c99 -pedantic
+DEPS_DIR := deps
+CFLAGS := -O2 -std=c99 -pedantic
+INCLUDE := -Iinclude -I$(DEPS_DIR)/jsmn -I$(DEPS_DIR)/roar/include
 
-.PHONY: clean
+.PHONY: clean examples shared static
 
-lib: lib/libjsmn-tea.a
+static: lib/libjsmn-tea.a
+
+shared: lib/libjsmn-tea.so
 
 examples: bin/demo bin/benchmark
 
 clean:
-	@rm -rf bin lib *.o include/jsmn.h
+	@rm -rf bin lib
 
-include/jsmn.h: jsmn/jsmn.h
-	@cp -u $< $@
-
-lib/libjsmn-tea.a: jsmn.o jsmn-tea.o
+lib/libjsmn-tea.a: jsmn.o jsmn-tea.o roar.o
 	@mkdir -p lib
 	@$(AR) rc $@ $^
-	@rm *.o
+	@rm -f *.o
 
-%.o: src/%.c include/%.h include/jsmn.h
+lib/libjsmn-tea.so: src/jsmn-tea.c include/jsmn-tea.h
+	@mkdir -p lib
+	@$(CC) -o $@ $(INCLUDE) $(CFLAGS) -fPIC -shared $<
+
+jsmn-tea.o: src/jsmn-tea.c include/jsmn-tea.h
+	@$(CC) -o $@ -c $(INCLUDE) $(CFLAGS) $<
+
+jsmn.o: $(DEPS_DIR)/jsmn/jsmn.c $(DEPS_DIR)/jsmn/jsmn.h
 	@$(CC) -o $@ -c $(CFLAGS) $<
 
-jsmn.o: jsmn/jsmn.c include/jsmn.h
-	@$(CC) -o $@ -c $(CFLAGS) $<
+roar.o: $(DEPS_DIR)/roar/include/roar.h
+	@$(CC) -x c -o $@ -c $(CFLAGS) -DROAR_IMPLEMENTATION $<
 
 bin/%: examples/%.c lib/libjsmn-tea.a
 	@mkdir -p bin
-	@$(CC) -o $@ $(CFLAGS) $^
+	@$(CC) -o $@ $(INCLUDE) $(CFLAGS) $< lib/libjsmn-tea.a

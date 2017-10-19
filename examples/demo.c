@@ -6,14 +6,15 @@
 static struct jsmn_tea * tea = NULL;
 
 /* Gracefully exit to the OS. */
-void exit_gracefully(int rc)
+static void exit_gracefully(int rc)
 {
         jsmn_tea_destroy(&tea);
         exit(rc);
 }
 
 /* Error handler for JSMN-TEA. */
-void error_handler(struct jsmn_tea_handler * handler)
+static int error_handler(
+    struct roar_handler * handler, roar_function_t * referent, int code)
 {
         exit_gracefully(EXIT_FAILURE);
 }
@@ -21,20 +22,12 @@ void error_handler(struct jsmn_tea_handler * handler)
 int main()
 {
         /* First let us create a new JSMN-TEA object from a JSON file. */
-        struct jsmn_tea_handler handler = { stderr, &error_handler };
+        struct roar_handler handler = { stderr, NULL, NULL, &error_handler };
         tea =
             jsmn_tea_create("examples/demo.json", JSMN_TEA_MODE_LOAD, &handler);
 
         /* Then, let us require a JSON object as base token. */
         jsmn_tea_next_object(tea, NULL);
-
-        /* The following would raise an error if not muted since JSON keys must
-         * be strings.
-         */
-        jsmn_tea_error_disable(tea);
-        int i;
-        jsmn_tea_next_number(tea, JSMN_TEA_TYPE_INT, &i);
-        jsmn_tea_error_enable(tea);
 
         /* Let us now parse the content of the first cell requiring a double
          * for the value.
@@ -45,8 +38,9 @@ int main()
         jsmn_tea_next_number(tea, JSMN_TEA_TYPE_DOUBLE, &value);
         printf("{ %s : %g }\n", key, value);
 
-        /* Let us trigger some error. */
-        jsmn_tea_error_raise(tea, JSMN_ERROR_INVAL, "invalid key `%s`\n", key);
+        /* Let us trigger some custom error with ROAR. */
+        ROAR_ERRWP_FORMAT(&handler, &main, JSMN_ERROR_INVAL, "Invalid key",
+            "\"%s\", %s", key, jsmn_tea_strtoken(tea));
 
         exit_gracefully(EXIT_SUCCESS);
 }

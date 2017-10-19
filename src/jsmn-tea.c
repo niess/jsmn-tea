@@ -21,18 +21,23 @@
  * THE SOFTWARE.
  */
 
-#include "jsmn-tea.h"
+#include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "jsmn-tea.h"
+
+/* Maximum size of a JSMN tag string. */
+#define TAG_SIZE 13
+
 /* The low level TEA object. */
 struct tea_object {
         struct jsmn_tea api;
-        int error_enabled;
         int n_tokens;
         int buffer_size;
-        char * path;
+        char * strtoken;
+        char * tag;
         jsmntok_t * tokens;
         char * buffer;
         char data[];
@@ -45,58 +50,17 @@ static const char * string_jsmnerr[3] = { "JSMN_ERROR_NOMEM",
         "JSMN_ERROR_INVAL", "JSMN_ERROR_PART" };
 
 /* Prototypes of error messages. */
-static const char * string_error_file = "%s (%d): could not open file `%s`.\n";
-static const char * string_error_json =
-    "%s (%d): invalid JSON file `%s` (%s).\n";
-static const char * string_error_memory =
-    "%s (%d): could not allocate memory.\n";
-static const char * string_error_mode = "%s (%d): invalid mode (%d).\n";
-
-static const char * string_error_io =
-    "%s (%d): error while reading file `%s`.\n";
-static const char * string_error_type =
-    "%s (%d): [%s #%d] unexpected type (%s).\n";
-static const char * string_error_empty =
-    "%s (%d): [%s #%d] missing value for key `%s`.\n";
-static const char * string_error_value =
-    "%s (%d): [%s #%d] invalid value. Expected %s. Got `%s`.\n";
-
-/* Generic routine for processing an error. */
-static int error_raise(
-    struct jsmn_tea * tea_, enum jsmnerr rc, const char * fmt, ...)
-{
-        struct tea_object * tea = (struct tea_object *)tea_;
-        struct jsmn_tea_handler * const handler = tea_->handler;
-        if ((!tea->error_enabled) || (handler == NULL)) return rc;
-        if (handler->stream != NULL) {
-                va_list valist;
-                va_start(valist, fmt);
-                vfprintf(handler->stream, fmt, valist);
-                va_end(valist);
-        }
-        if (handler->callback != NULL) handler->callback(handler);
-        return rc;
-}
-
-/* Print a formated error message BUT without calling the error handler. */
-static void error_print(struct jsmn_tea * tea_, const char * fmt, ...)
-{
-        struct tea_object * tea = (struct tea_object *)tea_;
-        struct jsmn_tea_handler * const handler = tea_->handler;
-        if ((tea->error_enabled) && (handler != NULL) &&
-            (handler->stream != NULL)) {
-                va_list valist;
-                va_start(valist, fmt);
-                vfprintf(handler->stream, fmt, valist);
-                va_end(valist);
-        }
-}
+static const char * string_error_json[2] = { "Invalid JSON file", "%s" };
+static const char * string_error_mode[2] = { "Invalid mode", "%d" };
+static const char * string_error_type[2] = { "Unexpected type", "%s, %s" };
+static const char * string_error_empty[2] = { "Missing value", "\"%s\", %s" };
+static const char * string_error_value[2] = { "Invalid value", "\"%s\", %s" };
 
 /* Library function for creating a new `jsmn_tea` instance. */
 struct jsmn_tea * jsmn_tea_create(
-    char * arg, enum jsmn_tea_mode mode, struct jsmn_tea_handler * handler)
+    char * arg, enum jsmn_tea_mode mode, struct roar_handler * handler)
 {
-        struct tea_object header = { { { 0, 0, 0 }, 1, handler }, 1 };
+        struct tea_object header = { { { 0, 0, 0 }, 1, handler } };
         struct tea_object * tea = NULL;
         size_t buffer_size = 0;
 
@@ -104,8 +68,7 @@ struct jsmn_tea * jsmn_tea_create(
                 /* Open the file. */
                 FILE * stream = fopen(arg, "rb");
                 if (stream == NULL) {
-                        error_raise(&header.api, 0, string_error_file, __FILE__,
-                            __LINE__, arg);
+                        ROAR_ERRNO_MESSAGE(handler, &jsmn_tea_create, 0, arg);
                         return NULL;
                 }
 
@@ -115,30 +78,26 @@ struct jsmn_tea * jsmn_tea_create(
                 rewind(stream);
 
                 /* Allocate the required memory. */
-                const int n = strlen(arg) + 1;
-                tea =
-                    malloc(sizeof(*tea) + (n + buffer_size + 1) * sizeof(char));
+                const int path_size = strlen(arg);
+                tea = malloc(sizeof(*tea) +
+                    (path_size + TAG_SIZE + buffer_size + 1) * sizeof(char));
                 if (tea == NULL) {
-                        error_raise(&header.api, JSMN_ERROR_NOMEM,
-                            string_error_memory, __FILE__, __LINE__);
+                        ROAR_ERRNO(handler, &jsmn_tea_create, 0);
                         return NULL;
                 }
 
                 /* Initialise the new `tea` object. */
                 memset(tea, 0x0, sizeof(*tea));
-                tea->path = tea->data;
-                memcpy(tea->path, arg, n * sizeof(*tea->path));
-                tea->buffer = tea->path + n;
-
+                tea->strtoken = tea->data;
+                memcpy(tea->strtoken, arg, path_size * sizeof(*tea->strtoken));
+                tea->tag = tea->data + path_size;
+                tea->buffer = tea->tag + TAG_SIZE;
                 const int nread = fread(
                     tea->buffer, sizeof(*tea->buffer), buffer_size, stream);
                 fclose(stream);
                 if (nread != buffer_size) {
-                        error_print(&header.api, string_error_io, __FILE__,
-                            __LINE__, arg);
                         free(tea);
-                        if ((handler != NULL) && (handler->callback != NULL))
-                                handler->callback(handler);
+                        ROAR_ERRNO(handler, &jsmn_tea_create, EIO);
                         return NULL;
                 }
                 tea->buffer[buffer_size] = 0;
@@ -148,25 +107,25 @@ struct jsmn_tea * jsmn_tea_create(
                 const int n = (mode == JSMN_TEA_MODE_DUP) ?
                     (buffer_size + 1) * sizeof(char) :
                     0;
-                tea = malloc(sizeof(*tea) + n);
+                tea = malloc(
+                    sizeof(*tea) + (n + TAG_SIZE) * sizeof(*tea->strtoken));
                 if (tea == NULL) {
-                        error_raise(&header.api, JSMN_ERROR_NOMEM,
-                            string_error_memory, __FILE__, __LINE__);
+                        ROAR_ERRNO(handler, &jsmn_tea_create, 0);
                         return NULL;
                 }
 
                 /* Initialise the new `tea` object. */
                 memset(tea, 0x0, sizeof(*tea));
-                tea->path = NULL;
+                tea->strtoken = tea->tag = tea->data;
+
                 if (mode == JSMN_TEA_MODE_DUP) {
-                        tea->buffer = tea->data;
-                        memcpy(tea->buffer, arg,
-                            (buffer_size + 1) * sizeof(*tea->buffer));
+                        tea->buffer = tea->tag + TAG_SIZE;
+                        memcpy(tea->buffer, arg, n);
                 } else
                         tea->buffer = arg;
         } else {
-                error_raise(&header.api, 0, string_error_mode, __FILE__,
-                    __LINE__, mode);
+                ROAR_ERRNO_FORMAT(
+                    handler, &jsmn_tea_create, EINVAL, "mode=%d", mode);
                 return NULL;
         }
 
@@ -180,12 +139,9 @@ struct jsmn_tea * jsmn_tea_create(
                 size += 2048;
                 void * tmp = realloc(tea->tokens, size * sizeof(*tea->tokens));
                 if (tmp == NULL) {
-                        error_print(&header.api, string_error_memory, __FILE__,
-                            __LINE__);
                         free(tea->tokens);
                         free(tea);
-                        if ((handler != NULL) && (handler->callback != NULL))
-                                handler->callback(handler);
+                        ROAR_ERRNO(handler, &jsmn_tea_create, 0);
                         return NULL;
                 }
                 tea->tokens = tmp;
@@ -197,12 +153,11 @@ struct jsmn_tea * jsmn_tea_create(
 
         /* Let us check the termination condition of the parsing. */
         if (tea->n_tokens < 0) {
-                error_print(&header.api, string_error_json, __FILE__, __LINE__,
-                    tea->path, string_jsmnerr[-tea->n_tokens - 1]);
+                const char * err = string_jsmnerr[-tea->n_tokens - 1];
                 free(tea->tokens);
                 free(tea);
-                if ((handler != NULL) && (handler->callback != NULL))
-                        handler->callback(handler);
+                ROAR_ERRWP_FORMAT(handler, &jsmn_tea_create, EINVAL,
+                    string_error_json[0], string_error_json[1], err);
                 return NULL;
         }
 
@@ -213,7 +168,6 @@ struct jsmn_tea * jsmn_tea_create(
 
         /* Configure the new object and return its handle. */
         tea->api.handler = handler;
-        tea->error_enabled = 1;
         tea->buffer_size = buffer_size + 1;
         return &tea->api;
 }
@@ -293,8 +247,8 @@ enum jsmnerr jsmn_tea_token_raw(
                 int n = strlen(s) + 1;
                 char * tmp = malloc(n * sizeof(char));
                 if (tmp == NULL) {
-                        return error_raise(&tea->api, JSMN_ERROR_NOMEM,
-                            string_error_memory, __FILE__, __LINE__);
+                        return ROAR_ERRNO(
+                            tea_->handler, &jsmn_tea_token_raw, 0);
                 }
                 memcpy(tmp, s, n * sizeof(char));
                 s = tmp;
@@ -307,10 +261,12 @@ enum jsmnerr jsmn_tea_token_raw(
 /* Library function for skipping the current token, recursively. */
 static enum jsmnerr token_skip(struct tea_object * tea, int * index)
 {
-        if (*index >= tea->n_tokens)
-                return error_raise(&tea->api, JSMN_ERROR_PART,
-                    string_error_json, __FILE__, __LINE__, tea->path,
+        if (*index >= tea->n_tokens) {
+                return ROAR_ERRWP_FORMAT(&tea->api.handler,
+                    &jsmn_tea_token_skip, JSMN_ERROR_INVAL,
+                    string_error_json[0], string_error_json[1],
                     string_jsmnerr[-JSMN_ERROR_PART - 1]);
+        }
 
         jsmntok_t * token = tea->tokens + *index;
         (*index)++;
@@ -340,15 +296,16 @@ enum jsmnerr jsmn_tea_token_skip(struct jsmn_tea * tea_)
 }
 
 /* Get the next token in the JSON string as a compound type. */
-static enum jsmnerr next_compound(
-    struct jsmn_tea * tea_, jsmntype_t type, int * size)
+static enum jsmnerr next_compound(struct jsmn_tea * tea_, jsmntype_t type,
+    int * size, roar_function_t * referent)
 {
         UNPACK_TEA_AND_TOKEN;
         if (token->type != type) {
                 if (size != NULL) *size = 0;
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, string_jsmntype[token->type]);
+                return ROAR_ERRWP_FORMAT(tea_->handler, referent,
+                    JSMN_ERROR_INVAL, string_error_type[0],
+                    string_error_type[1], string_jsmntype[token->type],
+                    jsmn_tea_strtoken(tea_));
         }
         if (size != NULL) *size = token->size;
         tea->api.index++;
@@ -358,13 +315,15 @@ static enum jsmnerr next_compound(
 /* Get the header of the next JSON object. */
 enum jsmnerr jsmn_tea_next_object(struct jsmn_tea * tea_, int * size)
 {
-        return next_compound(tea_, JSMN_OBJECT, size);
+        return next_compound(
+            tea_, JSMN_OBJECT, size, (roar_function_t *)&jsmn_tea_next_object);
 }
 
 /* Get the header of the next JSON array. */
 enum jsmnerr jsmn_tea_next_array(struct jsmn_tea * tea_, int * size)
 {
-        return next_compound(tea_, JSMN_ARRAY, size);
+        return next_compound(
+            tea_, JSMN_ARRAY, size, (roar_function_t *)&jsmn_tea_next_array);
 }
 
 /* Get the next JSON string. */
@@ -379,14 +338,15 @@ enum jsmnerr jsmn_tea_next_string(
                 return JSMN_SUCCESS;
         }
         if (token->type != JSMN_STRING) {
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, string_jsmntype[token->type]);
+                return ROAR_ERRWP_FORMAT(tea_->handler, &jsmn_tea_next_string,
+                    JSMN_ERROR_INVAL, string_error_type[0],
+                    string_error_type[1], string_jsmntype[token->type],
+                    jsmn_tea_strtoken(tea_));
         }
         if (key && (token->size != 1)) {
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_empty, __FILE__, __LINE__, tea->path,
-                    tea->api.index, s);
+                return ROAR_ERRWP_FORMAT(tea_->handler, &jsmn_tea_next_string,
+                    JSMN_ERROR_INVAL, string_error_empty[0],
+                    string_error_empty[1], s, jsmn_tea_strtoken(tea_));
         }
         if (string != NULL) *string = s;
         tea->api.index++;
@@ -438,17 +398,19 @@ enum jsmnerr jsmn_tea_next_number(
 {
         UNPACK_ALL;
         if (token->type != JSMN_PRIMITIVE) {
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, string_jsmntype[token->type]);
+                return ROAR_ERRWP_FORMAT(tea_->handler, &jsmn_tea_next_number,
+                    JSMN_ERROR_INVAL, string_error_type[0],
+                    string_error_type[1], string_jsmntype[token->type],
+                    jsmn_tea_strtoken(tea_));
         }
         char * endptr;
         if (type < JSMN_TEA_TYPE_FLOAT) {
                 const long l = strtol(s, &endptr, 10);
                 if (*endptr != 0) {
-                        return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                            string_error_value, __FILE__, __LINE__, tea->path,
-                            tea->api.index, "an integer", s);
+                        return ROAR_ERRWP_FORMAT(tea_->handler,
+                            &jsmn_tea_next_number, JSMN_ERROR_INVAL,
+                            string_error_value[0], string_error_value[1], s,
+                            jsmn_tea_strtoken(tea_));
                 }
                 if (value != NULL) {
                         integer_setter_t * setter[] = { &integer_to_char,
@@ -461,9 +423,10 @@ enum jsmnerr jsmn_tea_next_number(
         } else {
                 const double d = strtod(s, &endptr);
                 if (*endptr != 0) {
-                        return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                            string_error_value, __FILE__, __LINE__, tea->path,
-                            tea->api.index, "a floating number", s);
+                        return ROAR_ERRWP_FORMAT(tea_->handler,
+                            &jsmn_tea_next_number, JSMN_ERROR_INVAL,
+                            string_error_value[0], string_error_value[1], s,
+                            jsmn_tea_strtoken(tea_));
                 }
                 if (value != NULL) {
                         if (type == JSMN_TEA_TYPE_FLOAT)
@@ -481,18 +444,19 @@ enum jsmnerr jsmn_tea_next_bool(struct jsmn_tea * tea_, int * value)
 {
         UNPACK_ALL;
         if (token->type != JSMN_PRIMITIVE) {
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, string_jsmntype[token->type]);
+                return ROAR_ERRWP_FORMAT(tea_->handler, &jsmn_tea_next_bool,
+                    JSMN_ERROR_INVAL, string_error_type[0],
+                    string_error_type[1], string_jsmntype[token->type],
+                    jsmn_tea_strtoken(tea_));
         }
         if (strcmp(s, "true") == 0) {
                 if (value != NULL) *value = 1;
         } else if (strcmp(s, "false") == 0) {
                 if (value != NULL) *value = 0;
         } else {
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_value, tea->path, tea->api.index, "a boolean",
-                    s);
+                return ROAR_ERRWP_FORMAT(tea_->handler, &jsmn_tea_next_bool,
+                    JSMN_ERROR_INVAL, string_error_value[0],
+                    string_error_value[1], s, jsmn_tea_strtoken(tea_));
         }
         tea->api.index++;
         return JSMN_SUCCESS;
@@ -503,43 +467,18 @@ enum jsmnerr jsmn_tea_next_null(struct jsmn_tea * tea_)
 {
         UNPACK_ALL;
         if ((token->type != JSMN_PRIMITIVE) || (strcmp(s, "null") != 0)) {
-                return error_raise(&tea->api, JSMN_ERROR_INVAL,
-                    string_error_type, __FILE__, __LINE__, tea->path,
-                    tea->api.index, string_jsmntype[token->type]);
+                return ROAR_ERRWP_FORMAT(tea_->handler, &jsmn_tea_next_null,
+                    JSMN_ERROR_INVAL, string_error_type[0],
+                    string_error_type[1], string_jsmntype[token->type],
+                    jsmn_tea_strtoken(tea_));
         }
         return JSMN_SUCCESS;
 }
 
-/* Library function for disabling errors handling and dumping. */
-void jsmn_tea_error_disable(struct jsmn_tea * tea_)
+/* Library function for formating a JSMN token. */
+const char * jsmn_tea_strtoken(struct jsmn_tea * tea_)
 {
         struct tea_object * tea = (struct tea_object *)tea_;
-        tea->error_enabled = 0;
-}
-
-/* Library function for enabling errors handling and dumping. */
-void jsmn_tea_error_enable(struct jsmn_tea * tea_)
-{
-        struct tea_object * tea = (struct tea_object *)tea_;
-        tea->error_enabled = 1;
-}
-
-/* Library function for raising a custom error. */
-enum jsmnerr jsmn_tea_error_raise(
-    struct jsmn_tea * tea_, enum jsmnerr rc, const char * fmt, ...)
-{
-        struct tea_object * tea = (struct tea_object *)tea_;
-        struct jsmn_tea_handler * const handler = tea_->handler;
-        if ((!tea->error_enabled) || (handler == NULL)) return rc;
-        if (handler->stream != NULL) {
-                struct tea_object * tea = (struct tea_object *)tea_;
-                fprintf(handler->stream, "%s (%d): [%s #%d] ", __FILE__,
-                    __LINE__, tea->path, tea_->index);
-                va_list valist;
-                va_start(valist, fmt);
-                vfprintf(handler->stream, fmt, valist);
-                va_end(valist);
-        }
-        if (handler->callback != NULL) handler->callback(handler);
-        return rc;
+        const int n = snprintf(tea->tag, TAG_SIZE, "#%d", tea_->index);
+        return tea->strtoken;
 }

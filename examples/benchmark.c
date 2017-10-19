@@ -49,7 +49,7 @@ int main()
 #if (USE_JSMN_TEA)
         /* Let us benchmark the parsing with JSMN-TEA. */
         for (i = 0; i < N_TRIALS; i++) {
-                struct jsmn_tea_handler handler = { stderr, NULL };
+                struct roar_handler handler = { stderr, NULL, NULL, NULL };
                 struct jsmn_tea * tea =
                     jsmn_tea_create(json, JSMN_TEA_MODE_DUP, &handler);
                 int size, rc;

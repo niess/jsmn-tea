@@ -28,6 +28,7 @@
 #include <stdio.h>
 #endif
 #include "jsmn.h"
+#include "roar.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,23 +36,6 @@ extern "C" {
 
 /** JSMN return code for notifying a success. */
 #define JSMN_SUCCESS 0
-
-struct jsmn_tea_handler;
-/** Callback prototype of an error handler. */
-typedef void jsmn_tea_cb(struct jsmn_tea_handler * handler);
-
-/**
- * Base data structure for error handling
- *
- * Note that this is the minimalist set of data required for handling errors.
- * It can be overloaded for a specific usage.
- */
-struct jsmn_tea_handler {
-        /** The stream to which errors are reported, or `NULL`. */
-        FILE * stream;
-        /** A callback to call whenever an error occurs, or `NULL`. */
-        jsmn_tea_cb * callback;
-};
 
 /**
  * Handle for Text Encapsulation and Analysis using JSMN.
@@ -70,7 +54,7 @@ struct jsmn_tea {
         /* Index of the current JSMN token. */
         int index;
         /* User supplied error handler, or `NULL` if none. */
-        struct jsmn_tea_handler * handler;
+        struct roar_handler * handler;
 };
 
 /** Creation modes for a `jsmn_tea` instance. */
@@ -104,7 +88,7 @@ enum jsmn_tea_type {
  * @param  error_handler Optional error handler data, or `NULL`.
  */
 struct jsmn_tea * jsmn_tea_create(
-    char * arg, enum jsmn_tea_mode mode, struct jsmn_tea_handler * handler);
+    char * arg, enum jsmn_tea_mode mode, struct roar_handler * handler);
 
 /**
  * Properly destroy a `jsmn_tea` instance.
@@ -211,35 +195,13 @@ enum jsmnerr jsmn_tea_next_bool(struct jsmn_tea * tea, int * value);
 enum jsmnerr jsmn_tea_next_null(struct jsmn_tea * tea);
 
 /**
- * Disable errors handling and dumping.
- * @param tea A pointer to a `jsmn_tea` instance.
+ * Return a formated string of the current token.
+ * @param  tea A pointer to a `jsmn_tea` instance.
+ * @return     The formated token.
  *
- * **Warning** : the library functions will still return a `jsmnerr` enum value
- * in case of error.
+ * **Note** that the token is prepended with the current JSON file information.
  */
-void jsmn_tea_error_disable(struct jsmn_tea * tea);
-
-/**
- * Enable errors handling and dumping.
- * @param tea A pointer to a `jsmn_tea` instance.
- *
- * **Note** that a newly created `jsmn_tea` instance starts with errors enabled.
- */
-void jsmn_tea_error_enable(struct jsmn_tea * tea);
-
-/**
- * Raise a custom JSON parsing error.
- * @param  tea     A pointer to a `jsmn_tea` instance.
- * @param  rc      The `jsmnerr` enum value to report.
- * @param  fmt     A printf like format string.
- * @param  VARARGS Varibale arguments to the formating.
- * @return         The corresponding jsmnerr` enum value, for convenience.
- *
- * **Note** that the formated message is prepended with the current C and JSON
- * file(s) information.
- */
-enum jsmnerr jsmn_tea_error_raise(
-    struct jsmn_tea * tea, enum jsmnerr rc, const char * fmt, ...);
+const char * jsmn_tea_strtoken(struct jsmn_tea * tea);
 
 #ifdef __cplusplus
 }

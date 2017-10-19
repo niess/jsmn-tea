@@ -1,3 +1,6 @@
 [submodule "jsmn"]
-	path = jsmn
+	path = deps/jsmn
 	url = https://github.com/zserge/jsmn.git
+[submodule "roar"]
+	path = deps/roar
+	url = https://github.com/niess/roar
