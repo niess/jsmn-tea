@@ -472,6 +472,7 @@ enum jsmnerr jsmn_tea_next_null(struct jsmn_tea * tea_)
                     string_error_type[1], string_jsmntype[token->type],
                     jsmn_tea_strtoken(tea_));
         }
+        tea->api.index++;
         return JSMN_SUCCESS;
 }
 
