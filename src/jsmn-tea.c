@@ -51,7 +51,6 @@ static const char * string_jsmnerr[3] = { "JSMN_ERROR_NOMEM",
 
 /* Prototypes of error messages. */
 static const char * string_error_json[2] = { "Invalid JSON file", "%s" };
-static const char * string_error_mode[2] = { "Invalid mode", "%d" };
 static const char * string_error_type[2] = { "Unexpected type", "%s, %s" };
 static const char * string_error_empty[2] = { "Missing value", "\"%s\", %s" };
 static const char * string_error_value[2] = { "Invalid value", "\"%s\", %s" };
@@ -60,7 +59,6 @@ static const char * string_error_value[2] = { "Invalid value", "\"%s\", %s" };
 struct jsmn_tea * jsmn_tea_create(
     char * arg, enum jsmn_tea_mode mode, struct roar_handler * handler)
 {
-        struct tea_object header = { { { 0, 0, 0 }, 1, handler } };
         struct tea_object * tea = NULL;
         size_t buffer_size = 0;
 
@@ -480,6 +478,6 @@ enum jsmnerr jsmn_tea_next_null(struct jsmn_tea * tea_)
 const char * jsmn_tea_strtoken(struct jsmn_tea * tea_)
 {
         struct tea_object * tea = (struct tea_object *)tea_;
-        const int n = snprintf(tea->tag, TAG_SIZE, "#%d", tea_->index);
+        snprintf(tea->tag, TAG_SIZE, "#%d", tea_->index);
         return tea->strtoken;
 }
