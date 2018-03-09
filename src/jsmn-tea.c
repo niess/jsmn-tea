@@ -352,42 +352,53 @@ enum jsmnerr jsmn_tea_next_string(
 }
 
 /* Setter type for integer like numbers. */
-typedef void integer_setter_t(void * p, long l);
+typedef void integer_setter_t(void * p, long long l);
 
 /* The destination address is a char. */
-static void integer_to_char(void * p, long l) { *(char *)p = (char)l; }
+static void integer_to_char(void * p, long long l) { *(char *)p = (char)l; }
 
 /* The destination address is an unsigned char. */
-static void integer_to_unsigned_char(void * p, long l)
+static void integer_to_unsigned_char(void * p, long long l)
 {
         *(unsigned char *)p = (unsigned char)l;
 }
 
 /* The destination address is a short. */
-static void integer_to_short(void * p, long l) { *(short *)p = (short)l; }
+static void integer_to_short(void * p, long long l) { *(short *)p = (short)l; }
 
 /* The destination address is an unsigned short. */
-static void integer_to_unsigned_short(void * p, long l)
+static void integer_to_unsigned_short(void * p, long long l)
 {
         *(unsigned short *)p = (unsigned short)l;
 }
 
 /* The destination address is an int. */
-static void integer_to_int(void * p, long l) { *(int *)p = (int)l; }
+static void integer_to_int(void * p, long long l) { *(int *)p = (int)l; }
 
 /* The destination address is an unsigned int. */
-static void integer_to_unsigned_int(void * p, long l)
+static void integer_to_unsigned_int(void * p, long long l)
 {
         *(unsigned int *)p = (unsigned int)l;
 }
 
 /* The destination address is a long. */
-static void integer_to_long(void * p, long l) { *(long *)p = l; }
+static void integer_to_long(void * p, long long l) {
+        *(long *)p = (long)l;
+}
 
 /* The destination address is an unsigned long. */
-static void integer_to_unsigned_long(void * p, long l)
+static void integer_to_unsigned_long(void * p, long long l)
 {
         *(unsigned long *)p = (unsigned long)l;
+}
+
+/* The destination address is a long long. */
+static void integer_to_long_long(void * p, long long l) { *(long long *)p = l; }
+
+/* The destination address is an unsigned long long. */
+static void integer_to_unsigned_long_long(void * p, long long l)
+{
+        *(unsigned long long *)p = (unsigned long long)l;
 }
 
 /* Get the next JSON number. */
@@ -403,7 +414,7 @@ enum jsmnerr jsmn_tea_next_number(
         }
         char * endptr;
         if (type < JSMN_TEA_TYPE_FLOAT) {
-                const long l = strtol(s, &endptr, 10);
+                const long long l = strtoll(s, &endptr, 10);
                 if (*endptr != 0) {
                         return ROAR_ERRWP_FORMAT(tea_->handler,
                             &jsmn_tea_next_number, JSMN_ERROR_INVAL,
@@ -415,7 +426,8 @@ enum jsmnerr jsmn_tea_next_number(
                                 &integer_to_unsigned_char, &integer_to_short,
                                 &integer_to_unsigned_short, &integer_to_int,
                                 &integer_to_unsigned_int, &integer_to_long,
-                                &integer_to_unsigned_long };
+                                &integer_to_unsigned_long, &integer_to_long_long,
+                                &integer_to_unsigned_long_long };
                         setter[type](value, l);
                 }
         } else {
